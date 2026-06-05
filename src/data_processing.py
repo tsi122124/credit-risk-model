@@ -18,6 +18,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
 
 
 # =====================================================
@@ -210,6 +211,113 @@ class AggregateFeatures(
 
 
 # =====================================================
+# Task 4 - Proxy Target Engineering
+# =====================================================
+
+def create_proxy_target(df):
+    """
+    Create high-risk proxy target using
+    RFM analysis and KMeans clustering.
+    """
+
+    logging.info(
+        "Creating proxy target variable..."
+    )
+
+    rfm_df = df.copy()
+
+    rfm_df["TransactionStartTime"] = pd.to_datetime(
+        rfm_df["TransactionStartTime"]
+    )
+
+    snapshot_date = (
+        rfm_df["TransactionStartTime"].max()
+        + pd.Timedelta(days=1)
+    )
+
+    rfm = (
+        rfm_df.groupby("CustomerId")
+        .agg(
+            Recency=(
+                "TransactionStartTime",
+                lambda x: (
+                    snapshot_date - x.max()
+                ).days
+            ),
+            Frequency=(
+                "TransactionId",
+                "count"
+            ),
+            Monetary=(
+                "Amount",
+                "sum"
+            )
+        )
+        .reset_index()
+    )
+
+    scaler = StandardScaler()
+
+    rfm_scaled = scaler.fit_transform(
+        rfm[
+            [
+                "Recency",
+                "Frequency",
+                "Monetary"
+            ]
+        ]
+    )
+
+    kmeans = KMeans(
+        n_clusters=3,
+        random_state=42,
+        n_init=10
+    )
+
+    rfm["Cluster"] = kmeans.fit_predict(
+        rfm_scaled
+    )
+
+    cluster_summary = (
+        rfm.groupby("Cluster")
+        [
+            [
+                "Recency",
+                "Frequency",
+                "Monetary"
+            ]
+        ]
+        .mean()
+    )
+
+    logging.info(
+        "\nCluster Summary:\n%s",
+        cluster_summary
+    )
+
+    high_risk_cluster = (
+        cluster_summary["Frequency"]
+        .idxmin()
+    )
+
+    rfm["is_high_risk"] = np.where(
+        rfm["Cluster"] == high_risk_cluster,
+        1,
+        0
+    )
+
+    logging.info(
+        f"High-risk cluster: {high_risk_cluster}"
+    )
+
+    return rfm[
+        [
+            "CustomerId",
+            "is_high_risk"
+        ]
+    ]
+
+# =====================================================
 # Feature Lists
 # =====================================================
 
@@ -351,7 +459,24 @@ if __name__ == "__main__":
             RAW_DATA_PATH
         )
 
-        # Run pipeline
+        # ==========================================
+        # Task 4 - Create Proxy Target
+        # ==========================================
+
+        target_df = create_proxy_target(
+            df
+        )
+
+        df = df.merge(
+            target_df,
+            on="CustomerId",
+            how="left"
+        )
+
+        # ==========================================
+        # Run Feature Engineering Pipeline
+        # ==========================================
+
         processed_data = (
             full_pipeline.fit_transform(df)
         )
@@ -367,6 +492,11 @@ if __name__ == "__main__":
         processed_df = pd.DataFrame(
             processed_data,
             columns=feature_names
+        )
+
+        # Add target column
+        processed_df["is_high_risk"] = (
+            df["is_high_risk"].values
         )
 
         # Create folders
@@ -386,7 +516,7 @@ if __name__ == "__main__":
             index=False
         )
 
-        # Save fitted pipeline
+        # Save pipeline
         joblib.dump(
             full_pipeline,
             PIPELINE_PATH
@@ -408,11 +538,12 @@ if __name__ == "__main__":
         )
 
         print(
-            "\nFirst 10 Feature Names:"
+            "\nTarget Distribution:"
         )
 
         print(
-            processed_df.columns[:10]
+            processed_df["is_high_risk"]
+            .value_counts()
         )
 
     except Exception as e:
