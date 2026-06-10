@@ -5,3 +5,5 @@ mlruns/
 .env
 venv/
 .DS_Store
+models/*.pkl
+models/*.joblib
