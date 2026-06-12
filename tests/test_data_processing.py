@@ -4,7 +4,13 @@ import pytest
 import sys
 import os
 
-sys.path.insert(s
+from src.data_processing import (
+    DataValidator,
+    DateFeatureExtractor,
+    create_proxy_target
+)
+
+sys.path.insert(
     0,
     os.path.abspath(
         os.path.join(
@@ -14,16 +20,10 @@ sys.path.insert(s
     )
 )
 
-from src.data_processing import (
-    DataValidator,
-    DateFeatureExtractor,
-    create_proxy_target
-)
-
-
 # =====================================================
 # Test DataValidator
 # =====================================================
+
 
 def test_data_validator_accepts_valid_data():
 
