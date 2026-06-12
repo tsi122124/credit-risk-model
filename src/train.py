@@ -25,7 +25,6 @@ from sklearn.metrics import (
     f1_score,
     roc_auc_score
 )
-from mlflow.tracking import MlflowClient
 
 # =====================================================
 # Configure Logging

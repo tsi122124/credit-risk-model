@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  credit-risk-api:
+    build: .
+    container_name: credit-risk-api
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - .:/app
+
+    restart: always
